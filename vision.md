@@ -1,55 +1,59 @@
 # judo2mqtt – Vision
 
-## Wozu
+## Why this exists
 
-Judo i-soft plus Wasserenthärter hat keine offene lokale API.
-Der interne `DevCommManagerDaemon` spricht JSON über TCP Port 8833 (netzwerkweit erreichbar).
-judo2mqtt verbindet sich mit diesem Daemon, empfängt Push-Notifications und veröffentlicht
-die Werte auf MQTT – inklusive Home Assistant Autodiscovery.
+The Judo i-soft plus water softener has no open local API.
+Its internal `DevCommManagerDaemon` speaks JSON over TCP port 8833 — reachable on the local network.
+judo2mqtt connects to this daemon, receives push notifications, and publishes the values to MQTT
+including Home Assistant Autodiscovery.
 
-## Ziel
+## Goal
 
-Wasserenthärter-Daten in Home Assistant ohne Cloud, ohne Judo-Account, ohne Änderungen am Gerät.
+Water softener data in Home Assistant — no cloud, no Judo account, no changes to the device.
 
-## In-Scope
+## In scope
 
-- TCP-Client für DevCommManagerDaemon Port 8833 (JSON + 2-Byte Length Prefix Framing)
-- Login-Handshake: login → get devices → connect mit want notification
-- MQTT Publishing für relevante Push-Gruppen: consumption, waterstop, settings, info
+- TCP client for DevCommManagerDaemon port 8833 (JSON + 2-byte length-prefix framing)
+- Login handshake: login → get devices → connect with want_notification
+- MQTT publishing for relevant push groups: consumption, waterstop, settings, info
 - Home Assistant MQTT Autodiscovery
-- Docker Container (linux/amd64, linux/arm64, linux/arm/v7)
-- Reconnect-Logik bei Verbindungsverlust
+- Docker container (linux/amd64, linux/arm64, linux/arm/v7)
+- Reconnect logic on connection loss
+- Web UI (prism-ui, statically embedded) for runtime configuration
+- Valve control via MQTT command topic
 
-## Out-of-Scope (vorerst)
+## Out of scope
 
-- Web-UI (prism-ui, statisch eingebettet) zur Konfiguration
-- Unterstützung anderer Judo-Modelle (nur i-soft plus getestet)
+- Support for other Judo models (only i-soft plus tested)
 
-## Architektur-Entscheidungen
+## Architecture decisions
 
-### Bidirektionaler DCM-Client (ab v0.1)
+### Bidirectional DCM client
 
-Der DCM-Client wird von Anfang an für bidirektionale Kommunikation ausgelegt –
-auch wenn v0.1 nur lesend arbeitet (Push-Notifications empfangen).
+The DCM client is designed for bidirectional communication from the start —
+even though early versions only read (receive push notifications).
 
-**Warum:** Ob der DCM Schreib-Befehle unterstützt (z.B. Wasserstop öffnen/schließen)
-ist noch nicht analysiert. Falls ja, soll das ohne strukturellen Umbau nachrüstbar sein.
+**Why:** Whether the DCM supports write commands (e.g. open/close valve) was initially
+unknown. Making the TCP writer mutex-protected from day one allows new commands to be
+added as methods without refactoring the core structure.
 
-**Konkret:** Der TCP-Writer wird mutex-gesichert gekapselt (`sync.Mutex` auf `send()`).
-Schreib-Befehle können dann als neue Methoden draufgesetzt werden – kein Refactor der Kernstruktur.
+**Concretely:** `sync.Mutex` on `send()` — write commands are new methods on top,
+no structural change to the core.
 
-**Protokoll-Analyse:** Beim Aufbau von #2 (DCM-Client) via Wireshark prüfen,
-welche Nachrichten die Judo-App beim Wasserstop-Toggle sendet.
+### Valve control via MQTT
 
-### Möglicher v0.x: Wasserstop-Steuerung via MQTT
+The valve (Wasserstop) can be controlled via MQTT command topic:
 
-Falls Protokoll-Analyse positiv:
-- MQTT-Command-Topic: `judo/switch/waterstop/set` (Payload: `ON`/`OFF`)
-- HA-Autodiscovery als `switch`-Entity
-- Kein eigenes Issue bis Protokoll-Analyse abgeschlossen
+```
+judo/switch/waterstop/set  →  ON / OFF
+```
+
+Home Assistant Autodiscovery registers this as a `switch` entity.
 
 ## Roadmap
 
-- v0.1 – Verbindung + Login-Handshake + alle Felder auf MQTT
+- v0.1 – Connection + login handshake + all fields on MQTT
 - v0.2 – HA Autodiscovery
-- v0.3 – Reconnect-Logik, Health-Endpoint, Docker Hub
+- v0.3 – Reconnect logic, health endpoint, Docker Hub
+- v0.4 – Valve control (waterstop open/close via MQTT)
+- v0.5 – Web UI for runtime configuration
