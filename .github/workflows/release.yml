@@ -3,11 +3,9 @@ name: Release Container
 on:
   push:
     tags: ["v*"]
+  schedule:
+    - cron: "0 3 * * 1"
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to build"
-        required: false
 
 jobs:
   test:
@@ -18,6 +16,7 @@ jobs:
         with:
           go-version: "1.24"
       - run: go test ./...
+
 
   build:
     needs: test
@@ -60,5 +59,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
           cache-from: type=gha
           cache-to: type=gha,mode=max
