@@ -1,6 +1,6 @@
 services:
   judo2mqtt:
-    image: git.zk35.de/secalpha/judo2mqtt:latest
+    image: ghcr.io/zk35-de/mqtt-judo-bridge:latest
     restart: unless-stopped
     env_file: .env
     ports:
