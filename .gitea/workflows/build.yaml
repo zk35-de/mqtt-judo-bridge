@@ -3,6 +3,9 @@ name: Build & Publish Container
 on:
   push:
     tags: ["v*"]
+  schedule:
+    - cron: "15 3 * * 1"
+  workflow_dispatch:
 
 jobs:
   test:
@@ -12,7 +15,7 @@ jobs:
       - name: Run tests
         run: |
           podman run --rm --platform linux/amd64 -v "$PWD":/src:z -w /src \
-            docker.io/library/golang:1.26.3-alpine \
+            docker.io/library/golang:1.24-alpine \
             go test ./...
 
   build:
@@ -27,7 +30,12 @@ jobs:
 
       - name: Set build tag
         id: tag
-        run: echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=latest" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Login to registry
         env:
@@ -65,12 +73,14 @@ jobs:
           TAG: ${{ steps.tag.outputs.value }}
           IMAGE: git.zk35.de/secalpha/judo2mqtt
         run: |
-          podman manifest rm ${IMAGE}:${TAG} 2>/dev/null || true
-          podman manifest create ${IMAGE}:${TAG} \
-            ${IMAGE}:${TAG}-amd64 \
-            ${IMAGE}:${TAG}-armv7 \
-            ${IMAGE}:${TAG}-arm64
-          podman manifest push ${IMAGE}:${TAG}
+          if [[ "${TAG}" != "latest" ]]; then
+            podman manifest rm ${IMAGE}:${TAG} 2>/dev/null || true
+            podman manifest create ${IMAGE}:${TAG} \
+              ${IMAGE}:${TAG}-amd64 \
+              ${IMAGE}:${TAG}-armv7 \
+              ${IMAGE}:${TAG}-arm64
+            podman manifest push ${IMAGE}:${TAG}
+          fi
 
           podman manifest rm ${IMAGE}:latest 2>/dev/null || true
           podman manifest create ${IMAGE}:latest \
