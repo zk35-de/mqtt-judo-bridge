@@ -17,6 +17,7 @@ Wasserenthärter-Daten in Home Assistant ohne Cloud, ohne Judo-Account, ohne Än
 - Login-Handshake: login → get devices → connect mit want notification
 - MQTT Publishing für relevante Push-Gruppen: consumption, waterstop, settings, info
 - Home Assistant MQTT Autodiscovery
+- Web-UI (prism-ui, statisch eingebettet) zur Konfiguration: MQTT-Broker, Judo-Host/Port, Topic-Prefix, HA-Discovery
 - Docker Container (linux/amd64, linux/arm64, linux/arm/v7)
 - Reconnect-Logik bei Verbindungsverlust
 
