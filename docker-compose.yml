@@ -1,0 +1,5 @@
+services:
+  judo2mqtt:
+    build: .
+    restart: unless-stopped
+    env_file: .env
