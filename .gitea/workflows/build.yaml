@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run tests
         run: |
-          podman run --rm -v "$PWD":/src:z -w /src \
+          podman run --rm --platform linux/amd64 -v "$PWD":/src:z -w /src \
             docker.io/library/golang:1.26.3-alpine \
             go test ./...
 
