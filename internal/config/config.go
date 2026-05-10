@@ -20,6 +20,7 @@ type Config struct {
 	MQTTHAPrefix    string
 
 	PollIntervalSec int
+	WebAddr         string
 	LogLevel        string
 }
 
@@ -32,6 +33,7 @@ func Load() (*Config, error) {
 		MQTTHADiscovery: true,
 		MQTTHAPrefix:    "homeassistant",
 		PollIntervalSec: 60,
+		WebAddr:         ":8080",
 		LogLevel:        "info",
 	}
 
@@ -79,6 +81,9 @@ func Load() (*Config, error) {
 		if i, err := strconv.Atoi(v); err == nil && i > 0 {
 			c.PollIntervalSec = i
 		}
+	}
+	if v := os.Getenv("WEB_ADDR"); v != "" {
+		c.WebAddr = v
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		c.LogLevel = v

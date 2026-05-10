@@ -14,7 +14,11 @@ import (
 	"git.zk35.de/secalpha/judo2mqtt/internal/config"
 	"git.zk35.de/secalpha/judo2mqtt/internal/dcm"
 	judoMQTT "git.zk35.de/secalpha/judo2mqtt/internal/mqtt"
+	"git.zk35.de/secalpha/judo2mqtt/internal/state"
+	"git.zk35.de/secalpha/judo2mqtt/internal/web"
 )
+
+const version = "v0.1.0"
 
 func main() {
 	cfg, err := config.Load()
@@ -33,7 +37,9 @@ func main() {
 		level = slog.LevelError
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
-	slog.Info("judo2mqtt starting", "host", cfg.JudoHost, "serial", cfg.JudoSerial)
+	slog.Info("judo2mqtt starting", "host", cfg.JudoHost, "serial", cfg.JudoSerial, "version", version)
+
+	st := state.New()
 
 	// MQTT
 	opts := pahoMQTT.NewClientOptions().
@@ -42,6 +48,11 @@ func main() {
 		SetAutoReconnect(true).
 		SetOnConnectHandler(func(_ pahoMQTT.Client) {
 			slog.Info("mqtt connected", "broker", cfg.MQTTBroker)
+			st.SetMQTT(true)
+		}).
+		SetConnectionLostHandler(func(_ pahoMQTT.Client, err error) {
+			slog.Warn("mqtt connection lost", "err", err)
+			st.SetMQTT(false)
 		})
 	if cfg.MQTTUser != "" {
 		opts.SetUsername(cfg.MQTTUser)
@@ -65,26 +76,35 @@ func main() {
 		slog.Error("dcm connect failed", "err", err)
 		os.Exit(1)
 	}
-	defer dcmClient.Close()
+	st.SetDCM(true)
+	defer func() { dcmClient.Close(); st.SetDCM(false) }()
 
 	pub.RegisterDiscovery(cfg.JudoSerial)
+
+	// Web UI
+	webSrv := web.New(st, version)
+	go func() {
+		if err := webSrv.Start(ctx, cfg.WebAddr); err != nil {
+			slog.Error("web server error", "err", err)
+		}
+	}()
 
 	ticker := time.NewTicker(time.Duration(cfg.PollIntervalSec) * time.Second)
 	defer ticker.Stop()
 
-	poll(ctx, dcmClient, pub)
+	poll(ctx, dcmClient, pub, st)
 	for {
 		select {
 		case <-ctx.Done():
 			slog.Info("shutting down")
 			return
 		case <-ticker.C:
-			poll(ctx, dcmClient, pub)
+			poll(ctx, dcmClient, pub, st)
 		}
 	}
 }
 
-func poll(ctx context.Context, c *dcm.Client, pub *judoMQTT.Publisher) {
+func poll(ctx context.Context, c *dcm.Client, pub *judoMQTT.Publisher, st *state.State) {
 	data := map[string]string{}
 
 	fetch := func(group, command, key string) {
@@ -98,7 +118,6 @@ func poll(ctx context.Context, c *dcm.Client, pub *judoMQTT.Publisher) {
 		}
 	}
 
-	// water total returns " raw softened" – split here
 	resp, err := c.Poll(ctx, "consumption", "water total")
 	if err == nil && resp["status"] == "ok" {
 		parts := strings.Fields(fmt.Sprintf("%v", resp["data"]))
@@ -115,10 +134,10 @@ func poll(ctx context.Context, c *dcm.Client, pub *judoMQTT.Publisher) {
 	fetch("settings", "residual hardness", "residual_hardness")
 
 	pub.PublishAll(data)
+	st.Update(data)
 	slog.Debug("polled", "fields", len(data))
 }
 
-// pahoClientAdapter adapts paho.mqtt.Client to our judoMQTT.Client interface.
 type pahoClientAdapter struct {
 	c pahoMQTT.Client
 }

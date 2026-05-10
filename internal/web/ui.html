@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>judo2mqtt</title>
+<style>
+/* PRISM UI v2.0 – secalpha/prism-ui */
+:root,[data-theme="dark"]{--bg:#04060f;--bg2:#080c1a;--text:#e8edf5;--sub:#64748b;--accent:#6366f1;--accent-hover:#818cf8;--cyan:#06b6d4;--ok:#22c55e;--warn:#f59e0b;--fehler:#ef4444;--fg:var(--text);--muted:var(--sub);--primary:var(--accent);--surface:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.1);--glass:rgba(255,255,255,0.04);--glass-h:rgba(255,255,255,0.075);--glass-border:rgba(255,255,255,0.1);--card-bg:linear-gradient(135deg,rgba(255,255,255,0.055) 0%,rgba(255,255,255,0.015) 100%);--shadow-card:0 2px 20px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.07);--shadow-btn:0 4px 16px color-mix(in srgb,var(--accent) 28%,transparent),inset 0 1px 0 rgba(255,255,255,0.14);--mono:'Fira Code','JetBrains Mono','Menlo','Consolas',monospace;--font-body:var(--mono);--font-size-base:13px;--line-height:1.6;--radius-sm:4px;--radius-md:8px;--radius-lg:10px;--radius:10px;--radius-xl:14px;--radius-2xl:16px;color-scheme:dark}
+[data-theme="light"]{--bg:#f0f2f8;--bg2:#e6e9f2;--text:#1a1d2e;--sub:#64748b;--surface:rgba(0,0,0,0.04);--border:rgba(0,0,0,0.1);--glass:rgba(255,255,255,0.6);--glass-border:rgba(0,0,0,0.1);--card-bg:linear-gradient(135deg,rgba(255,255,255,0.8) 0%,rgba(255,255,255,0.55) 100%);--shadow-card:0 2px 20px rgba(0,0,0,0.08),inset 0 1px 0 rgba(255,255,255,0.9);color-scheme:light}
+@media(prefers-color-scheme:light){:root:not([data-theme]){--bg:#f0f2f8;--bg2:#e6e9f2;--text:#1a1d2e;--sub:#64748b;--surface:rgba(0,0,0,0.04);--border:rgba(0,0,0,0.1);--glass:rgba(255,255,255,0.6);--glass-border:rgba(0,0,0,0.1);--card-bg:linear-gradient(135deg,rgba(255,255,255,0.8) 0%,rgba(255,255,255,0.55) 100%);--shadow-card:0 2px 20px rgba(0,0,0,0.08),inset 0 1px 0 rgba(255,255,255,0.9);color-scheme:light}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:var(--font-size-base)}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:var(--font-size-base);line-height:var(--line-height);min-height:100vh;-webkit-font-smoothing:antialiased;padding:24px 16px 64px}
+.container{max-width:640px;margin:0 auto}
+.card{position:relative;background:var(--card-bg);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border:1px solid var(--glass-border);border-radius:var(--radius-2xl);padding:1.2rem;box-shadow:var(--shadow-card)}
+.card+.card{margin-top:16px}
+.card-title{font-size:0.68rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--sub);font-weight:600;margin-bottom:14px}
+.badge{font-size:0.62rem;font-family:var(--mono);padding:0.1rem 0.45rem;border-radius:var(--radius-sm);letter-spacing:0.1em;font-weight:600;color:var(--sub);border:1px solid var(--glass-border);background:var(--glass)}
+.header{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+.header h1{font-size:1.15rem;font-weight:700;font-family:var(--mono);color:var(--accent);letter-spacing:-0.5px}
+.status-dot{display:inline-block;width:0.55rem;height:0.55rem;border-radius:50%;background:var(--sub);flex-shrink:0}
+.status-dot.ok{background:var(--ok);animation:pulse-ok 2s ease-in-out infinite}
+.status-dot.dead{background:var(--fehler)}
+@keyframes pulse-ok{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 40%,transparent)}50%{box-shadow:0 0 0 4px transparent}}
+@media(prefers-reduced-motion:reduce){.status-dot.ok{animation:none}}
+
+.conn-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:16px}
+.conn-item label{display:block;font-size:0.68rem;color:var(--sub);margin-bottom:2px}
+.conn-item .value{font-family:var(--mono);font-size:0.8rem;display:flex;align-items:center;gap:6px}
+
+.sensor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:480px){.sensor-grid{grid-template-columns:1fr}.conn-grid{grid-template-columns:1fr}}
+.sensor-item{background:var(--glass);border:1px solid var(--glass-border);border-radius:var(--radius-lg);padding:0.8rem 1rem}
+.sensor-item label{display:block;font-size:0.66rem;color:var(--sub);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px}
+.sensor-item .val{font-family:var(--mono);font-size:1.1rem;font-weight:600;color:var(--text)}
+.sensor-item .unit{font-size:0.68rem;color:var(--sub);margin-left:3px}
+.sensor-item .val.ok{color:var(--ok)}
+.sensor-item .val.warn{color:var(--warn)}
+.sensor-item .val.dead{color:var(--fehler)}
+
+.meta{display:flex;gap:24px;margin-top:14px;padding-top:12px;border-top:1px solid var(--glass-border)}
+.meta-item label{font-size:0.66rem;color:var(--sub);display:block}
+.meta-item .value{font-size:0.78rem;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>judo2mqtt</h1>
+    <span class="badge" id="version">…</span>
+  </div>
+
+  <!-- Verbindungen -->
+  <div class="card">
+    <div class="card-title">Verbindungen</div>
+    <div class="conn-grid">
+      <div class="conn-item">
+        <label>MQTT</label>
+        <div class="value"><span class="status-dot" id="mqtt-dot"></span><span id="mqtt-label">…</span></div>
+      </div>
+      <div class="conn-item">
+        <label>Judo DCM</label>
+        <div class="value"><span class="status-dot" id="dcm-dot"></span><span id="dcm-label">…</span></div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="meta-item"><label>Letzter Poll</label><div class="value" id="last-poll">—</div></div>
+      <div class="meta-item"><label>Uptime</label><div class="value" id="uptime">—</div></div>
+    </div>
+  </div>
+
+  <!-- Wasserdaten -->
+  <div class="card">
+    <div class="card-title">Wasser</div>
+    <div class="sensor-grid">
+      <div class="sensor-item">
+        <label>Gesamt</label>
+        <div><span class="val" id="water-total">—</span><span class="unit">L</span></div>
+      </div>
+      <div class="sensor-item">
+        <label>Enthärtet</label>
+        <div><span class="val" id="water-softened">—</span><span class="unit">L</span></div>
+      </div>
+      <div class="sensor-item">
+        <label>Ø täglich</label>
+        <div><span class="val" id="water-avg">—</span><span class="unit">L/Tag</span></div>
+      </div>
+      <div class="sensor-item">
+        <label>Ventil</label>
+        <div><span class="val" id="valve">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Salz & Einstellungen -->
+  <div class="card">
+    <div class="card-title">Salz &amp; Einstellungen</div>
+    <div class="sensor-grid">
+      <div class="sensor-item">
+        <label>Salzmenge</label>
+        <div><span class="val" id="salt-qty">—</span><span class="unit">g</span></div>
+      </div>
+      <div class="sensor-item">
+        <label>Salzreichweite</label>
+        <div><span class="val" id="salt-range">—</span><span class="unit">Tage</span></div>
+      </div>
+      <div class="sensor-item">
+        <label>Resthärte</label>
+        <div><span class="val" id="hardness">—</span><span class="unit">°dH</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+async function load() {
+  try {
+    const [statusR, healthR] = await Promise.all([fetch('/api/status'), fetch('/health')]);
+    const st = await statusR.json();
+    const h  = await healthR.json();
+
+    document.getElementById('version').textContent = h.version ?? '?';
+
+    setDot('mqtt', st.mqtt_connected);
+    setDot('dcm',  st.dcm_connected);
+
+    document.getElementById('last-poll').textContent =
+      st.last_poll ? formatRelative(new Date(st.last_poll)) : '—';
+    document.getElementById('uptime').textContent = formatUptime(st.uptime_seconds ?? 0);
+
+    setText('water-total',    st.water_total_l);
+    setText('water-softened', st.water_softened_l);
+    setText('water-avg',      st.water_average_l_day);
+    setText('salt-qty',       st.salt_quantity_g);
+    setText('hardness',       st.residual_hardness_ddh);
+
+    const valveEl = document.getElementById('valve');
+    const v = st.valve ?? '';
+    valveEl.textContent = v || '—';
+    valveEl.className = 'val' + (v === 'opened' ? ' ok' : v === 'closed' ? ' dead' : '');
+
+    const saltDays = parseInt(st.salt_range_days ?? '999', 10);
+    const saltEl = document.getElementById('salt-range');
+    saltEl.textContent = isNaN(saltDays) ? '—' : String(saltDays);
+    saltEl.className = 'val' + (saltDays <= 14 ? ' dead' : saltDays <= 30 ? ' warn' : '');
+
+  } catch(e) { console.error(e); }
+}
+
+function setDot(id, connected) {
+  document.getElementById(id+'-dot').className = 'status-dot ' + (connected ? 'ok' : 'dead');
+  document.getElementById(id+'-label').textContent = connected ? 'verbunden' : 'getrennt';
+}
+
+function setText(id, val) {
+  document.getElementById(id).textContent = (val && val !== '') ? val : '—';
+}
+
+function formatRelative(d) {
+  const s = Math.round((Date.now() - d.getTime()) / 1000);
+  if (s < 5)    return 'gerade eben';
+  if (s < 60)   return s + 's';
+  if (s < 3600) return Math.round(s/60) + 'm';
+  return Math.round(s/3600) + 'h';
+}
+
+function formatUptime(s) {
+  if (s < 60)   return s + 's';
+  if (s < 3600) return Math.floor(s/60) + 'm';
+  return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+}
+
+load();
+setInterval(load, 15000);
+</script>
+</body>
+</html>
