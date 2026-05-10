@@ -13,6 +13,8 @@ type Config struct {
 	JudoSerial string
 
 	MQTTBroker      string
+	MQTTUser        string
+	MQTTPassword    string
 	MQTTTopicPrefix string
 	MQTTHADiscovery bool
 	MQTTHAPrefix    string
@@ -62,6 +64,8 @@ func Load() (*Config, error) {
 	if v := os.Getenv("MQTT_BROKER"); v != "" {
 		c.MQTTBroker = v
 	}
+	c.MQTTUser = os.Getenv("MQTT_USER")
+	c.MQTTPassword = os.Getenv("MQTT_PASSWORD")
 	if v := os.Getenv("MQTT_TOPIC_PREFIX"); v != "" {
 		c.MQTTTopicPrefix = v
 	}

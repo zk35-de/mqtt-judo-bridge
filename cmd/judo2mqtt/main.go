@@ -43,6 +43,10 @@ func main() {
 		SetOnConnectHandler(func(_ pahoMQTT.Client) {
 			slog.Info("mqtt connected", "broker", cfg.MQTTBroker)
 		})
+	if cfg.MQTTUser != "" {
+		opts.SetUsername(cfg.MQTTUser)
+		opts.SetPassword(cfg.MQTTPassword)
+	}
 	mqttClient := pahoMQTT.NewClient(opts)
 	if tok := mqttClient.Connect(); tok.Wait() && tok.Error() != nil {
 		slog.Error("mqtt connect failed", "err", tok.Error())

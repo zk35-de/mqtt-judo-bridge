@@ -57,6 +57,28 @@ func TestLoadNoSecretLogging(t *testing.T) {
 	}
 }
 
+func TestLoadMQTTAuth(t *testing.T) {
+	os.Setenv("JUDO_HOST", "x")
+	os.Setenv("JUDO_SERIAL", "x")
+	os.Setenv("MQTT_USER", "mqttuser")
+	os.Setenv("MQTT_PASSWORD", "mqttha")
+	defer os.Unsetenv("JUDO_HOST")
+	defer os.Unsetenv("JUDO_SERIAL")
+	defer os.Unsetenv("MQTT_USER")
+	defer os.Unsetenv("MQTT_PASSWORD")
+
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.MQTTUser != "mqttuser" {
+		t.Errorf("MQTTUser: got %q", c.MQTTUser)
+	}
+	if c.MQTTPassword != "mqttha" {
+		t.Errorf("MQTTPassword: got %q", c.MQTTPassword)
+	}
+}
+
 func TestLoadHADiscoveryDisable(t *testing.T) {
 	os.Setenv("JUDO_HOST", "x")
 	os.Setenv("JUDO_SERIAL", "x")
