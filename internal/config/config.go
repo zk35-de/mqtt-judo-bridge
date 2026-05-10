@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"strconv"
 )
@@ -109,21 +108,12 @@ func Load() (*Config, error) {
 		c.LogLevel = v
 	}
 
-	var errs []string
-	if c.JudoHost == "" {
-		errs = append(errs, "JUDO_HOST is required")
-	}
-	if c.JudoSerial == "" {
-		errs = append(errs, "JUDO_SERIAL is required")
-	}
-	if len(errs) > 0 {
-		msg := ""
-		for _, e := range errs {
-			msg += e + "\n"
-		}
-		return nil, errors.New(msg)
-	}
 	return c, nil
+}
+
+// IsComplete reports whether all required fields for connecting to the device are set.
+func (c *Config) IsComplete() bool {
+	return c.JudoHost != "" && c.JudoSerial != ""
 }
 
 func LoadFile(path string) (*FileConfig, error) {

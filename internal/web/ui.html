@@ -69,6 +69,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 <body>
 <div class="container">
 
+  <div id="setup-banner" style="display:none;background:color-mix(in srgb,var(--warn) 15%,transparent);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);border-radius:var(--radius-lg);padding:0.7rem 1rem;margin-bottom:16px;font-size:0.78rem;color:var(--warn)">
+    Keine Konfiguration vorhanden – bitte Judo-IP und MQTT-Daten unten eintragen.
+  </div>
+
   <div class="header">
     <h1>judo2mqtt</h1>
     <span class="badge" id="version">…</span>
@@ -189,6 +193,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 
 </div>
 <script>
+let _configReadyShown = false;
+
 async function load() {
   try {
     const [statusR, healthR] = await Promise.all([fetch('/api/status'), fetch('/health')]);
@@ -196,6 +202,18 @@ async function load() {
     const h  = await healthR.json();
 
     document.getElementById('version').textContent = h.version ?? '?';
+
+    const banner = document.getElementById('setup-banner');
+    if (!st.config_ready) {
+      banner.style.display = 'block';
+      if (!_configReadyShown) {
+        _configReadyShown = true;
+        const form = document.getElementById('settings-form');
+        if (!form.classList.contains('open')) toggleSettings();
+      }
+    } else {
+      banner.style.display = 'none';
+    }
 
     setDot('mqtt', st.mqtt_connected);
     setDot('dcm',  st.dcm_connected);
@@ -274,7 +292,8 @@ async function saveConfig() {
     });
     const body = await r.json();
     if (r.ok) {
-      msg.textContent = 'Gespeichert. Neustart läuft…';
+      msg.textContent = 'Gespeichert. Verbindung wird aufgebaut…';
+      setTimeout(() => { btn.disabled = false; msg.textContent = ''; }, 4000);
       msg.className = 'save-msg ok';
     } else {
       msg.textContent = body.error ?? 'Fehler';

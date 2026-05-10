@@ -65,7 +65,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.st.Snapshot())
+	snap := s.st.Snapshot()
+	snap.ConfigReady = s.cfg != nil && s.cfg.IsComplete()
+	writeJSON(w, http.StatusOK, snap)
 }
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, _ *http.Request) {

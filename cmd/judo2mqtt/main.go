@@ -26,6 +26,10 @@ type services struct {
 	pub        *judoMQTT.Publisher
 }
 
+func (s *services) ready() bool {
+	return s != nil && s.dcmClient != nil && s.pub != nil
+}
+
 func (s *services) stop(st *state.State) {
 	if s.dcmClient != nil {
 		s.dcmClient.Close()
@@ -89,7 +93,11 @@ func main() {
 		level = slog.LevelError
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
-	slog.Info("judo2mqtt starting", "host", cfg.JudoHost, "serial", cfg.JudoSerial, "version", version)
+	if cfg.IsComplete() {
+		slog.Info("judo2mqtt starting", "host", cfg.JudoHost, "serial", cfg.JudoSerial, "version", version)
+	} else {
+		slog.Warn("judo2mqtt starting without config – open WebUI to configure", "addr", cfg.WebAddr, "version", version)
+	}
 
 	st := state.New()
 	reloadCh := make(chan config.FileConfig, 1)
@@ -97,10 +105,15 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	svc, err := startServices(ctx, cfg, st)
-	if err != nil {
-		slog.Error("startup failed", "err", err)
-		os.Exit(1)
+	var svc *services
+	if cfg.IsComplete() {
+		svc, err = startServices(ctx, cfg, st)
+		if err != nil {
+			slog.Error("startup failed", "err", err)
+			svc = &services{}
+		}
+	} else {
+		svc = &services{}
 	}
 
 	webSrv := web.New(st, version, cfg, func(fc config.FileConfig) error {
@@ -119,7 +132,9 @@ func main() {
 	ticker := time.NewTicker(time.Duration(cfg.PollIntervalSec) * time.Second)
 	defer ticker.Stop()
 
-	poll(ctx, svc.dcmClient, svc.pub, st)
+	if svc.ready() {
+		poll(ctx, svc.dcmClient, svc.pub, st)
+	}
 
 	for {
 		select {
@@ -143,7 +158,9 @@ func main() {
 			poll(ctx, svc.dcmClient, svc.pub, st)
 
 		case <-ticker.C:
-			poll(ctx, svc.dcmClient, svc.pub, st)
+			if svc.ready() {
+				poll(ctx, svc.dcmClient, svc.pub, st)
+			}
 		}
 	}
 }

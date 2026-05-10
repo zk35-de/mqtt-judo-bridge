@@ -69,6 +69,7 @@ func (s *State) Update(data map[string]string) {
 }
 
 type Snapshot struct {
+	ConfigReady      bool    `json:"config_ready"`
 	MQTTConnected    bool    `json:"mqtt_connected"`
 	DCMConnected     bool    `json:"dcm_connected"`
 	LastPoll         *string `json:"last_poll"`

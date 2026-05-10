@@ -6,13 +6,33 @@ import (
 	"testing"
 )
 
-func TestLoadMissingRequired(t *testing.T) {
+func TestLoadMissingRequired_ReturnsIncomplete(t *testing.T) {
 	os.Unsetenv("JUDO_HOST")
 	os.Unsetenv("JUDO_SERIAL")
 	os.Unsetenv("CONFIG_FILE")
-	_, err := Load()
-	if err == nil {
-		t.Fatal("expected error when required fields missing")
+
+	c, err := Load()
+	if err != nil {
+		t.Fatal("Load() must not error on missing required fields:", err)
+	}
+	if c.IsComplete() {
+		t.Error("IsComplete() should be false when required fields missing")
+	}
+}
+
+func TestIsComplete(t *testing.T) {
+	c := &Config{JudoHost: "x", JudoSerial: "y"}
+	if !c.IsComplete() {
+		t.Error("expected complete")
+	}
+	c.JudoHost = ""
+	if c.IsComplete() {
+		t.Error("expected incomplete without JudoHost")
+	}
+	c.JudoHost = "x"
+	c.JudoSerial = ""
+	if c.IsComplete() {
+		t.Error("expected incomplete without JudoSerial")
 	}
 }
 
@@ -25,6 +45,9 @@ func TestLoadDefaults(t *testing.T) {
 	c, err := Load()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !c.IsComplete() {
+		t.Error("expected complete")
 	}
 	if c.JudoPort != 8833 {
 		t.Errorf("JudoPort default: got %d", c.JudoPort)
