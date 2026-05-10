@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
+	"fmt"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -19,6 +19,58 @@ import (
 )
 
 const version = "v0.1.0"
+
+type services struct {
+	mqttClient pahoMQTT.Client
+	dcmClient  *dcm.Client
+	pub        *judoMQTT.Publisher
+}
+
+func (s *services) stop(st *state.State) {
+	if s.dcmClient != nil {
+		s.dcmClient.Close()
+		st.SetDCM(false)
+	}
+	if s.mqttClient != nil {
+		s.mqttClient.Disconnect(500)
+		st.SetMQTT(false)
+	}
+}
+
+func startServices(ctx context.Context, cfg *config.Config, st *state.State) (*services, error) {
+	opts := pahoMQTT.NewClientOptions().
+		AddBroker(cfg.MQTTBroker).
+		SetClientID("judo2mqtt").
+		SetAutoReconnect(true).
+		SetOnConnectHandler(func(_ pahoMQTT.Client) {
+			slog.Info("mqtt connected", "broker", cfg.MQTTBroker)
+			st.SetMQTT(true)
+		}).
+		SetConnectionLostHandler(func(_ pahoMQTT.Client, err error) {
+			slog.Warn("mqtt connection lost", "err", err)
+			st.SetMQTT(false)
+		})
+	if cfg.MQTTUser != "" {
+		opts.SetUsername(cfg.MQTTUser)
+		opts.SetPassword(cfg.MQTTPassword)
+	}
+	mqttClient := pahoMQTT.NewClient(opts)
+	if tok := mqttClient.Connect(); tok.Wait() && tok.Error() != nil {
+		return nil, tok.Error()
+	}
+
+	dcmClient := dcm.New(cfg.JudoHost, cfg.JudoPort, cfg.JudoUser, cfg.JudoSerial)
+	if err := dcmClient.Connect(ctx); err != nil {
+		mqttClient.Disconnect(500)
+		return nil, err
+	}
+	st.SetDCM(true)
+
+	pub := judoMQTT.New(&pahoClientAdapter{mqttClient}, cfg.MQTTTopicPrefix, cfg.MQTTHADiscovery, cfg.MQTTHAPrefix)
+	pub.RegisterDiscovery(cfg.JudoSerial)
+
+	return &services{mqttClient: mqttClient, dcmClient: dcmClient, pub: pub}, nil
+}
 
 func main() {
 	cfg, err := config.Load()
@@ -40,51 +92,23 @@ func main() {
 	slog.Info("judo2mqtt starting", "host", cfg.JudoHost, "serial", cfg.JudoSerial, "version", version)
 
 	st := state.New()
+	reloadCh := make(chan config.FileConfig, 1)
 
-	// MQTT
-	opts := pahoMQTT.NewClientOptions().
-		AddBroker(cfg.MQTTBroker).
-		SetClientID("judo2mqtt").
-		SetAutoReconnect(true).
-		SetOnConnectHandler(func(_ pahoMQTT.Client) {
-			slog.Info("mqtt connected", "broker", cfg.MQTTBroker)
-			st.SetMQTT(true)
-		}).
-		SetConnectionLostHandler(func(_ pahoMQTT.Client, err error) {
-			slog.Warn("mqtt connection lost", "err", err)
-			st.SetMQTT(false)
-		})
-	if cfg.MQTTUser != "" {
-		opts.SetUsername(cfg.MQTTUser)
-		opts.SetPassword(cfg.MQTTPassword)
-	}
-	mqttClient := pahoMQTT.NewClient(opts)
-	if tok := mqttClient.Connect(); tok.Wait() && tok.Error() != nil {
-		slog.Error("mqtt connect failed", "err", tok.Error())
-		os.Exit(1)
-	}
-	defer mqttClient.Disconnect(500)
-
-	pub := judoMQTT.New(&pahoClientAdapter{mqttClient}, cfg.MQTTTopicPrefix, cfg.MQTTHADiscovery, cfg.MQTTHAPrefix)
-
-	// DCM
-	dcmClient := dcm.New(cfg.JudoHost, cfg.JudoPort, cfg.JudoUser, cfg.JudoSerial)
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	if err := dcmClient.Connect(ctx); err != nil {
-		slog.Error("dcm connect failed", "err", err)
+	svc, err := startServices(ctx, cfg, st)
+	if err != nil {
+		slog.Error("startup failed", "err", err)
 		os.Exit(1)
 	}
-	st.SetDCM(true)
-	defer func() { dcmClient.Close(); st.SetDCM(false) }()
 
-	pub.RegisterDiscovery(cfg.JudoSerial)
-
-	// Web UI
-	webSrv := web.New(st, version, cfg, func() {
-		p, _ := os.FindProcess(os.Getpid())
-		_ = p.Signal(syscall.SIGTERM)
+	webSrv := web.New(st, version, cfg, func(fc config.FileConfig) error {
+		select {
+		case reloadCh <- fc:
+		default:
+		}
+		return nil
 	})
 	go func() {
 		if err := webSrv.Start(ctx, cfg.WebAddr); err != nil {
@@ -95,14 +119,31 @@ func main() {
 	ticker := time.NewTicker(time.Duration(cfg.PollIntervalSec) * time.Second)
 	defer ticker.Stop()
 
-	poll(ctx, dcmClient, pub, st)
+	poll(ctx, svc.dcmClient, svc.pub, st)
+
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("shutting down")
+			svc.stop(st)
 			return
+
+		case fc := <-reloadCh:
+			slog.Info("config reload", "host", fc.JudoHost)
+			svc.stop(st)
+			config.Apply(cfg, fc)
+
+			newSvc, err := startServices(ctx, cfg, st)
+			if err != nil {
+				slog.Error("reload failed, services stopped", "err", err)
+				svc = &services{}
+				continue
+			}
+			svc = newSvc
+			ticker.Reset(time.Duration(cfg.PollIntervalSec) * time.Second)
+			poll(ctx, svc.dcmClient, svc.pub, st)
+
 		case <-ticker.C:
-			poll(ctx, dcmClient, pub, st)
+			poll(ctx, svc.dcmClient, svc.pub, st)
 		}
 	}
 }
@@ -117,13 +158,16 @@ func poll(ctx context.Context, c *dcm.Client, pub *judoMQTT.Publisher, st *state
 			return
 		}
 		if resp["status"] == "ok" {
-			data[key] = strings.TrimSpace(fmt.Sprintf("%v", resp["data"]))
+			val := resp["data"]
+			if s, ok := val.(string); ok {
+				data[key] = strings.TrimSpace(s)
+			}
 		}
 	}
 
 	resp, err := c.Poll(ctx, "consumption", "water total")
 	if err == nil && resp["status"] == "ok" {
-		parts := strings.Fields(fmt.Sprintf("%v", resp["data"]))
+		parts := strings.Fields(strings.TrimSpace(fmt.Sprintf("%v", resp["data"])))
 		if len(parts) == 2 {
 			data["water_total"] = parts[0]
 			data["water_softened"] = parts[1]

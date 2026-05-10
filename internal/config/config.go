@@ -168,6 +168,12 @@ func ToFileConfig(c *Config) FileConfig {
 	}
 }
 
+// Apply overwrites the mutable fields of cfg with values from fc.
+// Used for hot-reload: main calls this after receiving a reload signal.
+func Apply(cfg *Config, fc FileConfig) {
+	applyFileConfig(cfg, &fc)
+}
+
 func applyFileConfig(c *Config, fc *FileConfig) {
 	if fc.JudoHost != "" {
 		c.JudoHost = fc.JudoHost

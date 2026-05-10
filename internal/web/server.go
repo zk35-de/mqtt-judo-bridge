@@ -16,14 +16,14 @@ import (
 var uiHTML []byte
 
 type Server struct {
-	st        *state.State
-	version   string
-	cfg       *config.Config
-	onRestart func()
+	st       *state.State
+	version  string
+	cfg      *config.Config
+	onConfig func(config.FileConfig) error
 }
 
-func New(st *state.State, version string, cfg *config.Config, onRestart func()) *Server {
-	return &Server{st: st, version: version, cfg: cfg, onRestart: onRestart}
+func New(st *state.State, version string, cfg *config.Config, onConfig func(config.FileConfig) error) *Server {
+	return &Server{st: st, version: version, cfg: cfg, onConfig: onConfig}
 }
 
 func (s *Server) Start(ctx context.Context, addr string) error {
@@ -77,7 +77,7 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handlePostConfig(w http.ResponseWriter, r *http.Request) {
-	if s.cfg == nil || s.onRestart == nil {
+	if s.cfg == nil || s.onConfig == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "config management not available"})
 		return
 	}
@@ -99,13 +99,14 @@ func (s *Server) handlePostConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("config saved, restarting")
-	writeJSON(w, http.StatusOK, map[string]string{"status": "saved"})
+	if err := s.onConfig(fc); err != nil {
+		slog.Error("config apply failed", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "apply failed: " + err.Error()})
+		return
+	}
 
-	go func() {
-		time.Sleep(200 * time.Millisecond)
-		s.onRestart()
-	}()
+	slog.Info("config saved and applied")
+	writeJSON(w, http.StatusOK, map[string]string{"status": "applied"})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

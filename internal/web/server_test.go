@@ -133,8 +133,14 @@ func TestHandlePostConfig(t *testing.T) {
 
 	st := state.New()
 	cfg := &config.Config{ConfigFile: cfgFile}
-	restarted := false
-	s := New(st, "test", cfg, func() { restarted = true })
+
+	var receivedFC config.FileConfig
+	callCount := 0
+	s := New(st, "test", cfg, func(fc config.FileConfig) error {
+		receivedFC = fc
+		callCount++
+		return nil
+	})
 
 	haDisc := true
 	fc := config.FileConfig{
@@ -151,24 +157,19 @@ func TestHandlePostConfig(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("got %d", w.Code)
 	}
+	if callCount != 1 {
+		t.Errorf("onConfig called %d times, want 1", callCount)
+	}
+	if receivedFC.JudoHost != "10.1.2.3" {
+		t.Errorf("onConfig received JudoHost %q", receivedFC.JudoHost)
+	}
 
 	saved, err := config.LoadFile(cfgFile)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("config not saved to file:", err)
 	}
 	if saved.JudoHost != "10.1.2.3" {
 		t.Errorf("saved JudoHost: got %q", saved.JudoHost)
-	}
-
-	// onRestart is called async after 200ms; give it time
-	for i := 0; i < 10; i++ {
-		if restarted {
-			break
-		}
-		// tight poll
-		var ch = make(chan struct{})
-		go func() { close(ch) }()
-		<-ch
 	}
 }
 
@@ -176,10 +177,9 @@ func TestHandlePostConfigValidation(t *testing.T) {
 	dir := t.TempDir()
 	st := state.New()
 	cfg := &config.Config{ConfigFile: filepath.Join(dir, "judo2mqtt.json")}
-	s := New(st, "test", cfg, func() {})
+	s := New(st, "test", cfg, func(fc config.FileConfig) error { return nil })
 
-	// missing judo_host
-	fc := config.FileConfig{JudoSerial: "123"}
+	fc := config.FileConfig{JudoSerial: "123"} // missing judo_host
 	body, _ := json.Marshal(fc)
 	req := httptest.NewRequest("POST", "/api/config", bytes.NewReader(body))
 	w := httptest.NewRecorder()
