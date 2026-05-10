@@ -7,4 +7,5 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o judo2mqtt ./cmd/judo2mqtt
 
 FROM scratch
 COPY --from=builder /build/judo2mqtt /judo2mqtt
+VOLUME /config
 ENTRYPOINT ["/judo2mqtt"]

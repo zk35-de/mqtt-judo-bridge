@@ -15,7 +15,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 .container{max-width:640px;margin:0 auto}
 .card{position:relative;background:var(--card-bg);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border:1px solid var(--glass-border);border-radius:var(--radius-2xl);padding:1.2rem;box-shadow:var(--shadow-card)}
 .card+.card{margin-top:16px}
-.card-title{font-size:0.68rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--sub);font-weight:600;margin-bottom:14px}
+.card-title{font-size:0.68rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--sub);font-weight:600;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
 .badge{font-size:0.62rem;font-family:var(--mono);padding:0.1rem 0.45rem;border-radius:var(--radius-sm);letter-spacing:0.1em;font-weight:600;color:var(--sub);border:1px solid var(--glass-border);background:var(--glass)}
 .header{display:flex;align-items:center;gap:12px;margin-bottom:24px}
 .header h1{font-size:1.15rem;font-weight:700;font-family:var(--mono);color:var(--accent);letter-spacing:-0.5px}
@@ -42,6 +42,28 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 .meta{display:flex;gap:24px;margin-top:14px;padding-top:12px;border-top:1px solid var(--glass-border)}
 .meta-item label{font-size:0.66rem;color:var(--sub);display:block}
 .meta-item .value{font-size:0.78rem;font-family:var(--mono)}
+
+/* Settings */
+.toggle-btn{font-size:0.68rem;font-family:var(--mono);background:var(--glass);border:1px solid var(--glass-border);border-radius:var(--radius-sm);color:var(--sub);padding:0.15rem 0.5rem;cursor:pointer;letter-spacing:0.05em}
+.toggle-btn:hover{color:var(--text);border-color:var(--accent)}
+.settings-form{display:none}
+.settings-form.open{display:block}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:14px}
+@media(max-width:480px){.field-grid{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:3px}
+.field label{font-size:0.66rem;color:var(--sub);text-transform:uppercase;letter-spacing:0.07em}
+.field input[type=text],.field input[type=number],.field input[type=password]{background:var(--glass);border:1px solid var(--glass-border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--mono);font-size:0.8rem;padding:0.35rem 0.55rem;width:100%;outline:none}
+.field input:focus{border-color:var(--accent)}
+.field-check{display:flex;align-items:center;gap:6px;padding-top:16px}
+.field-check label{font-size:0.78rem;color:var(--sub);cursor:pointer}
+.field-check input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;cursor:pointer}
+.save-row{display:flex;align-items:center;gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--glass-border)}
+.btn-save{font-family:var(--mono);font-size:0.78rem;font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);padding:0.4rem 1.1rem;cursor:pointer;box-shadow:var(--shadow-btn)}
+.btn-save:hover{background:var(--accent-hover)}
+.btn-save:disabled{opacity:0.5;cursor:not-allowed}
+.save-msg{font-size:0.72rem;font-family:var(--mono)}
+.save-msg.ok{color:var(--ok)}
+.save-msg.err{color:var(--fehler)}
 </style>
 </head>
 <body>
@@ -113,6 +135,58 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
     </div>
   </div>
 
+  <!-- Konfiguration -->
+  <div class="card">
+    <div class="card-title">
+      Konfiguration
+      <button class="toggle-btn" id="cfg-toggle" onclick="toggleSettings()">bearbeiten</button>
+    </div>
+    <div class="settings-form" id="settings-form">
+      <div class="field-grid">
+        <div class="field">
+          <label>Judo Host</label>
+          <input type="text" id="cfg-judo-host" placeholder="10.35.5.133">
+        </div>
+        <div class="field">
+          <label>Judo Port</label>
+          <input type="number" id="cfg-judo-port" placeholder="8833">
+        </div>
+        <div class="field">
+          <label>Judo Seriennummer</label>
+          <input type="text" id="cfg-judo-serial" placeholder="122907">
+        </div>
+        <div class="field">
+          <label>Poll Interval (s)</label>
+          <input type="number" id="cfg-poll-interval" placeholder="60" min="10">
+        </div>
+        <div class="field">
+          <label>MQTT Broker</label>
+          <input type="text" id="cfg-mqtt-broker" placeholder="tcp://ha.local:1883">
+        </div>
+        <div class="field">
+          <label>MQTT Topic Prefix</label>
+          <input type="text" id="cfg-mqtt-prefix" placeholder="judo">
+        </div>
+        <div class="field">
+          <label>MQTT User</label>
+          <input type="text" id="cfg-mqtt-user" placeholder="(leer = anonym)">
+        </div>
+        <div class="field">
+          <label>MQTT Passwort</label>
+          <input type="password" id="cfg-mqtt-pass" placeholder="••••••••" autocomplete="new-password">
+        </div>
+      </div>
+      <div class="field-check">
+        <input type="checkbox" id="cfg-ha-discovery">
+        <label for="cfg-ha-discovery">Home Assistant Autodiscovery</label>
+      </div>
+      <div class="save-row">
+        <button class="btn-save" id="save-btn" onclick="saveConfig()">Speichern &amp; Neustart</button>
+        <span class="save-msg" id="save-msg"></span>
+      </div>
+    </div>
+  </div>
+
 </div>
 <script>
 async function load() {
@@ -147,6 +221,71 @@ async function load() {
     saltEl.className = 'val' + (saltDays <= 14 ? ' dead' : saltDays <= 30 ? ' warn' : '');
 
   } catch(e) { console.error(e); }
+}
+
+async function loadConfig() {
+  try {
+    const r = await fetch('/api/config');
+    if (!r.ok) return;
+    const c = await r.json();
+    document.getElementById('cfg-judo-host').value    = c.judo_host ?? '';
+    document.getElementById('cfg-judo-port').value    = c.judo_port ?? 8833;
+    document.getElementById('cfg-judo-serial').value  = c.judo_serial ?? '';
+    document.getElementById('cfg-mqtt-broker').value  = c.mqtt_broker ?? '';
+    document.getElementById('cfg-mqtt-prefix').value  = c.mqtt_topic_prefix ?? 'judo';
+    document.getElementById('cfg-mqtt-user').value    = c.mqtt_user ?? '';
+    document.getElementById('cfg-mqtt-pass').value    = c.mqtt_password ?? '';
+    document.getElementById('cfg-poll-interval').value = c.poll_interval_sec ?? 60;
+    document.getElementById('cfg-ha-discovery').checked = c.mqtt_ha_discovery !== false;
+  } catch(e) { console.error(e); }
+}
+
+function toggleSettings() {
+  const form = document.getElementById('settings-form');
+  const btn  = document.getElementById('cfg-toggle');
+  const open = form.classList.toggle('open');
+  btn.textContent = open ? 'schließen' : 'bearbeiten';
+  if (open) loadConfig();
+}
+
+async function saveConfig() {
+  const btn = document.getElementById('save-btn');
+  const msg = document.getElementById('save-msg');
+  btn.disabled = true;
+  msg.textContent = '';
+
+  const payload = {
+    judo_host:        document.getElementById('cfg-judo-host').value.trim(),
+    judo_port:        parseInt(document.getElementById('cfg-judo-port').value, 10) || 8833,
+    judo_serial:      document.getElementById('cfg-judo-serial').value.trim(),
+    mqtt_broker:      document.getElementById('cfg-mqtt-broker').value.trim(),
+    mqtt_topic_prefix:document.getElementById('cfg-mqtt-prefix').value.trim(),
+    mqtt_user:        document.getElementById('cfg-mqtt-user').value.trim(),
+    mqtt_password:    document.getElementById('cfg-mqtt-pass').value,
+    poll_interval_sec:parseInt(document.getElementById('cfg-poll-interval').value, 10) || 60,
+    mqtt_ha_discovery:document.getElementById('cfg-ha-discovery').checked,
+  };
+
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const body = await r.json();
+    if (r.ok) {
+      msg.textContent = 'Gespeichert. Neustart läuft…';
+      msg.className = 'save-msg ok';
+    } else {
+      msg.textContent = body.error ?? 'Fehler';
+      msg.className = 'save-msg err';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    msg.textContent = 'Verbindungsfehler';
+    msg.className = 'save-msg err';
+    btn.disabled = false;
+  }
 }
 
 function setDot(id, connected) {

@@ -5,3 +5,5 @@ services:
     env_file: .env
     ports:
       - "8050:8080"
+    volumes:
+      - ./config:/config

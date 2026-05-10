@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"git.zk35.de/secalpha/judo2mqtt/internal/config"
 	"git.zk35.de/secalpha/judo2mqtt/internal/state"
 )
 
@@ -15,12 +16,14 @@ import (
 var uiHTML []byte
 
 type Server struct {
-	st      *state.State
-	version string
+	st        *state.State
+	version   string
+	cfg       *config.Config
+	onRestart func()
 }
 
-func New(st *state.State, version string) *Server {
-	return &Server{st: st, version: version}
+func New(st *state.State, version string, cfg *config.Config, onRestart func()) *Server {
+	return &Server{st: st, version: version, cfg: cfg, onRestart: onRestart}
 }
 
 func (s *Server) Start(ctx context.Context, addr string) error {
@@ -28,6 +31,8 @@ func (s *Server) Start(ctx context.Context, addr string) error {
 	mux.HandleFunc("GET /{$}", s.handleUI)
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
+	mux.HandleFunc("GET /api/config", s.handleGetConfig)
+	mux.HandleFunc("POST /api/config", s.handlePostConfig)
 
 	srv := &http.Server{
 		Addr:         addr,
@@ -61,6 +66,46 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.st.Snapshot())
+}
+
+func (s *Server) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
+	if s.cfg == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "config not available"})
+		return
+	}
+	writeJSON(w, http.StatusOK, config.ToFileConfig(s.cfg))
+}
+
+func (s *Server) handlePostConfig(w http.ResponseWriter, r *http.Request) {
+	if s.cfg == nil || s.onRestart == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "config management not available"})
+		return
+	}
+
+	var fc config.FileConfig
+	if err := json.NewDecoder(r.Body).Decode(&fc); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	if fc.JudoHost == "" || fc.JudoSerial == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "judo_host and judo_serial are required"})
+		return
+	}
+
+	if err := config.Save(s.cfg.ConfigFile, fc); err != nil {
+		slog.Error("config save failed", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "save failed: " + err.Error()})
+		return
+	}
+
+	slog.Info("config saved, restarting")
+	writeJSON(w, http.StatusOK, map[string]string{"status": "saved"})
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		s.onRestart()
+	}()
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

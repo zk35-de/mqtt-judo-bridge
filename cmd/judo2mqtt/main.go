@@ -82,7 +82,10 @@ func main() {
 	pub.RegisterDiscovery(cfg.JudoSerial)
 
 	// Web UI
-	webSrv := web.New(st, version)
+	webSrv := web.New(st, version, cfg, func() {
+		p, _ := os.FindProcess(os.Getpid())
+		_ = p.Signal(syscall.SIGTERM)
+	})
 	go func() {
 		if err := webSrv.Start(ctx, cfg.WebAddr); err != nil {
 			slog.Error("web server error", "err", err)
