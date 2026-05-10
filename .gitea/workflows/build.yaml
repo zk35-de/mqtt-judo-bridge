@@ -36,12 +36,12 @@ jobs:
 
       - name: Build linux/arm/v7
         run: |
-          podman build --platform linux/arm/v7 \
+          sudo podman build --platform linux/arm/v7 \
             -t git.zk35.de/secalpha/judo2mqtt:${{ steps.tag.outputs.value }}-armv7 .
 
       - name: Build linux/arm64
         run: |
-          podman build --platform linux/arm64 \
+          sudo podman build --platform linux/arm64 \
             -t git.zk35.de/secalpha/judo2mqtt:${{ steps.tag.outputs.value }}-arm64 .
 
       - name: Login and push multi-arch manifest
