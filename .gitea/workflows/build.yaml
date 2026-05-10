@@ -29,41 +29,50 @@ jobs:
         id: tag
         run: echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
 
-      - name: Build linux/amd64
-        run: |
-          podman build --platform linux/amd64 \
-            -t git.zk35.de/secalpha/judo2mqtt:${{ steps.tag.outputs.value }}-amd64 .
-
-      - name: Build linux/arm/v7
-        run: |
-          sudo podman build --platform linux/arm/v7 \
-            -t git.zk35.de/secalpha/judo2mqtt:${{ steps.tag.outputs.value }}-armv7 .
-
-      - name: Build linux/arm64
-        run: |
-          sudo podman build --platform linux/arm64 \
-            -t git.zk35.de/secalpha/judo2mqtt:${{ steps.tag.outputs.value }}-arm64 .
-
-      - name: Login and push multi-arch manifest
+      - name: Login to registry
         env:
           GITEA_TOKEN: ${{ secrets.JUDO2MQTTCI }}
+        run: |
+          podman login git.zk35.de -u secalpha -p ${GITEA_TOKEN}
+          sudo podman login git.zk35.de -u secalpha -p ${GITEA_TOKEN}
+
+      - name: Build and push linux/amd64
+        env:
           TAG: ${{ steps.tag.outputs.value }}
           IMAGE: git.zk35.de/secalpha/judo2mqtt
         run: |
-          podman login git.zk35.de -u secalpha -p ${GITEA_TOKEN}
-
+          podman build --platform linux/amd64 -t ${IMAGE}:${TAG}-amd64 .
           podman push ${IMAGE}:${TAG}-amd64
-          podman push ${IMAGE}:${TAG}-armv7
-          podman push ${IMAGE}:${TAG}-arm64
 
-          podman manifest rm ${IMAGE}:${TAG} 2>/dev/null || podman rmi ${IMAGE}:${TAG} 2>/dev/null || true
+      - name: Build and push linux/arm/v7
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+          IMAGE: git.zk35.de/secalpha/judo2mqtt
+        run: |
+          sudo podman build --platform linux/arm/v7 -t ${IMAGE}:${TAG}-armv7 .
+          sudo podman push ${IMAGE}:${TAG}-armv7
+
+      - name: Build and push linux/arm64
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+          IMAGE: git.zk35.de/secalpha/judo2mqtt
+        run: |
+          sudo podman build --platform linux/arm64 -t ${IMAGE}:${TAG}-arm64 .
+          sudo podman push ${IMAGE}:${TAG}-arm64
+
+      - name: Create and push multi-arch manifest
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+          IMAGE: git.zk35.de/secalpha/judo2mqtt
+        run: |
+          podman manifest rm ${IMAGE}:${TAG} 2>/dev/null || true
           podman manifest create ${IMAGE}:${TAG} \
             ${IMAGE}:${TAG}-amd64 \
             ${IMAGE}:${TAG}-armv7 \
             ${IMAGE}:${TAG}-arm64
           podman manifest push ${IMAGE}:${TAG}
 
-          podman manifest rm ${IMAGE}:latest 2>/dev/null || podman rmi ${IMAGE}:latest 2>/dev/null || true
+          podman manifest rm ${IMAGE}:latest 2>/dev/null || true
           podman manifest create ${IMAGE}:latest \
             ${IMAGE}:${TAG}-amd64 \
             ${IMAGE}:${TAG}-armv7 \
