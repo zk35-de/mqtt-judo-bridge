@@ -40,11 +40,7 @@ func TestLoginHandshake(t *testing.T) {
 	})
 	defer cleanup()
 
-	// Simulate handshake manually (conn already set)
-	if err := c.send(Message{"command": "login", "group": "register", "user": "customer", "pwd": ""}); err != nil {
-		t.Fatal(err)
-	}
-	resp, err := c.recv()
+	resp, err := c.request(Message{"command": "login", "group": "register", "user": "customer", "pwd": ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,10 +48,7 @@ func TestLoginHandshake(t *testing.T) {
 		t.Errorf("login status: %v", resp["status"])
 	}
 
-	if err := c.send(Message{"command": "connect", "group": "register", "parameter": "i-soft plus", "serial number": "122907"}); err != nil {
-		t.Fatal(err)
-	}
-	resp, err = c.recv()
+	resp, err = c.request(Message{"command": "connect", "group": "register", "parameter": "i-soft plus", "serial number": "122907"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,10 +20,11 @@ type Server struct {
 	version  string
 	cfg      *config.Config
 	onConfig func(config.FileConfig) error
+	onValve  func(ctx context.Context, action string) (string, error)
 }
 
-func New(st *state.State, version string, cfg *config.Config, onConfig func(config.FileConfig) error) *Server {
-	return &Server{st: st, version: version, cfg: cfg, onConfig: onConfig}
+func New(st *state.State, version string, cfg *config.Config, onConfig func(config.FileConfig) error, onValve func(ctx context.Context, action string) (string, error)) *Server {
+	return &Server{st: st, version: version, cfg: cfg, onConfig: onConfig, onValve: onValve}
 }
 
 func (s *Server) Start(ctx context.Context, addr string) error {
@@ -33,6 +34,7 @@ func (s *Server) Start(ctx context.Context, addr string) error {
 	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("GET /api/config", s.handleGetConfig)
 	mux.HandleFunc("POST /api/config", s.handlePostConfig)
+	mux.HandleFunc("POST /api/valve", s.handleValve)
 
 	srv := &http.Server{
 		Addr:         addr,
@@ -109,6 +111,31 @@ func (s *Server) handlePostConfig(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("config saved and applied")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "applied"})
+}
+
+func (s *Server) handleValve(w http.ResponseWriter, r *http.Request) {
+	if s.onValve == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "valve control not available"})
+		return
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	if req.Action != "open" && req.Action != "close" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "action must be open or close"})
+		return
+	}
+	result, err := s.onValve(r.Context(), req.Action)
+	if err != nil {
+		slog.Error("valve command failed", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "valve": result})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -20,7 +21,7 @@ func newTestServer() *Server {
 		"salt_quantity": "24600",
 		"valve":         "opened",
 	})
-	return New(st, "test", nil, nil)
+	return New(st, "test", nil, nil, nil)
 }
 
 func TestHandleHealth(t *testing.T) {
@@ -95,7 +96,7 @@ func TestHandleGetConfig(t *testing.T) {
 		PollIntervalSec: 60,
 		ConfigFile:      "/config/judo2mqtt.json",
 	}
-	s := New(st, "test", cfg, nil)
+	s := New(st, "test", cfg, nil, nil)
 
 	req := httptest.NewRequest("GET", "/api/config", nil)
 	w := httptest.NewRecorder()
@@ -140,7 +141,7 @@ func TestHandlePostConfig(t *testing.T) {
 		receivedFC = fc
 		callCount++
 		return nil
-	})
+	}, nil)
 
 	haDisc := true
 	fc := config.FileConfig{
@@ -173,11 +174,54 @@ func TestHandlePostConfig(t *testing.T) {
 	}
 }
 
+func TestHandleValve(t *testing.T) {
+	st := state.New()
+
+	t.Run("no callback returns 503", func(t *testing.T) {
+		s := New(st, "test", nil, nil, nil)
+		req := httptest.NewRequest("POST", "/api/valve", bytes.NewBufferString(`{"action":"open"}`))
+		w := httptest.NewRecorder()
+		s.handleValve(w, req)
+		if w.Code != http.StatusServiceUnavailable {
+			t.Errorf("expected 503, got %d", w.Code)
+		}
+	})
+
+	t.Run("invalid action returns 400", func(t *testing.T) {
+		s := New(st, "test", nil, nil, func(_ context.Context, _ string) (string, error) { return "", nil })
+		req := httptest.NewRequest("POST", "/api/valve", bytes.NewBufferString(`{"action":"toggle"}`))
+		w := httptest.NewRecorder()
+		s.handleValve(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("open returns ok", func(t *testing.T) {
+		s := New(st, "test", nil, nil, func(_ context.Context, action string) (string, error) {
+			return "opened", nil
+		})
+		req := httptest.NewRequest("POST", "/api/valve", bytes.NewBufferString(`{"action":"open"}`))
+		w := httptest.NewRecorder()
+		s.handleValve(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["valve"] != "opened" {
+			t.Errorf("valve: got %q", body["valve"])
+		}
+	})
+}
+
 func TestHandlePostConfigValidation(t *testing.T) {
 	dir := t.TempDir()
 	st := state.New()
 	cfg := &config.Config{ConfigFile: filepath.Join(dir, "judo2mqtt.json")}
-	s := New(st, "test", cfg, func(fc config.FileConfig) error { return nil })
+	s := New(st, "test", cfg, func(fc config.FileConfig) error { return nil }, nil)
 
 	fc := config.FileConfig{JudoSerial: "123"} // missing judo_host
 	body, _ := json.Marshal(fc)

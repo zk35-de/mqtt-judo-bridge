@@ -42,28 +42,22 @@ func (c *Client) connect(ctx context.Context) error {
 	}
 	c.conn = conn
 
-	if err := c.send(Message{"command": "login", "group": "register", "user": c.user, "pwd": ""}); err != nil {
-		return fmt.Errorf("login send: %w", err)
-	}
-	resp, err := c.recv()
+	resp, err := c.requestLocked(Message{"command": "login", "group": "register", "user": c.user, "pwd": ""})
 	if err != nil {
-		return fmt.Errorf("login recv: %w", err)
+		return fmt.Errorf("login: %w", err)
 	}
 	if resp["status"] != "ok" {
 		return fmt.Errorf("login failed: %v", resp["data"])
 	}
 
-	if err := c.send(Message{
+	resp, err = c.requestLocked(Message{
 		"command":       "connect",
 		"group":         "register",
 		"parameter":     "i-soft plus",
 		"serial number": c.serial,
-	}); err != nil {
-		return fmt.Errorf("connect send: %w", err)
-	}
-	resp, err = c.recv()
+	})
 	if err != nil {
-		return fmt.Errorf("connect recv: %w", err)
+		return fmt.Errorf("connect: %w", err)
 	}
 	if resp["status"] != "ok" {
 		return fmt.Errorf("connect failed: %v", resp["data"])
@@ -86,28 +80,24 @@ func (c *Client) Poll(ctx context.Context, group, command string) (Message, erro
 }
 
 func (c *Client) poll(group, command string) (Message, error) {
-	if err := c.send(Message{"command": command, "group": group, "msgnumber": 1}); err != nil {
-		return nil, err
-	}
-	return c.recv()
+	return c.request(Message{"command": command, "group": group, "msgnumber": 1})
 }
 
-// Send sends a command with an optional parameter (for write commands, e.g. valve control).
+// Send sends a write command with an optional parameter (e.g. valve control).
 func (c *Client) Send(ctx context.Context, group, command, parameter string) (Message, error) {
 	msg := Message{"command": command, "group": group, "msgnumber": 1}
 	if parameter != "" {
 		msg["parameter"] = parameter
 	}
-	if err := c.send(msg); err != nil {
+	resp, err := c.request(msg)
+	if err != nil {
 		slog.Warn("dcm send error, reconnecting", "err", err)
 		if rerr := c.connect(ctx); rerr != nil {
 			return nil, fmt.Errorf("reconnect: %w", rerr)
 		}
-		if err := c.send(msg); err != nil {
-			return nil, err
-		}
+		return c.request(msg)
 	}
-	return c.recv()
+	return resp, nil
 }
 
 func (c *Client) Close() {
@@ -116,15 +106,19 @@ func (c *Client) Close() {
 	}
 }
 
-// send is mutex-protected to allow concurrent reads and writes safely.
-func (c *Client) send(msg Message) error {
+// request sends a message and reads the response atomically under the mutex.
+func (c *Client) request(msg Message) (Message, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	return Encode(c.conn, msg)
+	return c.requestLocked(msg)
 }
 
-func (c *Client) recv() (Message, error) {
+// requestLocked is the non-locking variant used by connect() during handshake.
+func (c *Client) requestLocked(msg Message) (Message, error) {
+	c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := Encode(c.conn, msg); err != nil {
+		return nil, err
+	}
 	c.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	return Decode(c.conn)
 }

@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
-	"fmt"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -105,6 +106,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	var svcMu sync.RWMutex
 	var svc *services
 	if cfg.IsComplete() {
 		svc, err = startServices(ctx, cfg, st)
@@ -122,6 +124,22 @@ func main() {
 		default:
 		}
 		return nil
+	}, func(ctx context.Context, action string) (string, error) {
+		svcMu.RLock()
+		current := svc
+		svcMu.RUnlock()
+		if !current.ready() {
+			return "", fmt.Errorf("services not ready")
+		}
+		resp, err := current.dcmClient.Send(ctx, "waterstop", "valve", action)
+		if err != nil {
+			return "", err
+		}
+		if resp["status"] != "ok" {
+			return "", fmt.Errorf("device error: %v", resp["data"])
+		}
+		data, _ := resp["data"].(string)
+		return strings.TrimSpace(data), nil
 	})
 	go func() {
 		if err := webSrv.Start(ctx, cfg.WebAddr); err != nil {
@@ -144,16 +162,18 @@ func main() {
 
 		case fc := <-reloadCh:
 			slog.Info("config reload", "host", fc.JudoHost)
+			svcMu.Lock()
 			svc.stop(st)
 			config.Apply(cfg, fc)
-
 			newSvc, err := startServices(ctx, cfg, st)
 			if err != nil {
 				slog.Error("reload failed, services stopped", "err", err)
 				svc = &services{}
+				svcMu.Unlock()
 				continue
 			}
 			svc = newSvc
+			svcMu.Unlock()
 			ticker.Reset(time.Duration(cfg.PollIntervalSec) * time.Second)
 			poll(ctx, svc.dcmClient, svc.pub, st)
 
