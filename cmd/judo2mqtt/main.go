@@ -19,7 +19,7 @@ import (
 	"git.zk35.de/secalpha/judo2mqtt/internal/web"
 )
 
-const version = "v0.1.3"
+const version = "v0.1.4"
 
 type services struct {
 	mqttClient pahoMQTT.Client
