@@ -2,9 +2,10 @@ module git.zk35.de/secalpha/judo2mqtt
 
 go 1.26.3
 
+require github.com/eclipse/paho.mqtt.golang v1.5.1
+
 require (
-	github.com/eclipse/paho.mqtt.golang v1.5.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	golang.org/x/net v0.44.0 // indirect
-	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 )
