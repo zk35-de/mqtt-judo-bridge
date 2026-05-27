@@ -1,5 +1,7 @@
 # judo2mqtt
 
+> **Source moved to Codeberg:** [codeberg.org/zk35-de/mqtt-judo-bridge](https://codeberg.org/zk35-de/mqtt-judo-bridge)
+
 Judo i-soft plus → MQTT bridge.
 
 Connects to the `DevCommManagerDaemon` (port 8833) of the Judo i-soft plus
