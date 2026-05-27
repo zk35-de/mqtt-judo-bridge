@@ -37,54 +37,81 @@ jobs:
             echo "value=latest" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Login to registry
+      - name: Login to registries
         env:
           GITEA_TOKEN: ${{ secrets.JUDO2MQTTCI }}
+          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
         run: |
           podman login git.zk35.de -u secalpha -p ${GITEA_TOKEN}
           sudo podman login git.zk35.de -u secalpha -p ${GITEA_TOKEN}
+          podman login docker.io -u zk35 -p ${DOCKER_TOKEN}
+          sudo podman login docker.io -u zk35 -p ${DOCKER_TOKEN}
 
       - name: Build and push linux/amd64
         env:
           TAG: ${{ steps.tag.outputs.value }}
-          IMAGE: git.zk35.de/secalpha/judo2mqtt
+          GITEA_IMAGE: git.zk35.de/secalpha/judo2mqtt
+          DHUB_IMAGE: docker.io/zk35de/mqtt-judo-bridge
         run: |
-          podman build --platform linux/amd64 -t ${IMAGE}:${TAG}-amd64 .
-          podman push ${IMAGE}:${TAG}-amd64
+          podman build --platform linux/amd64 -t ${GITEA_IMAGE}:${TAG}-amd64 .
+          podman push ${GITEA_IMAGE}:${TAG}-amd64
+          podman tag ${GITEA_IMAGE}:${TAG}-amd64 ${DHUB_IMAGE}:${TAG}-amd64
+          podman push ${DHUB_IMAGE}:${TAG}-amd64
 
       - name: Build and push linux/arm/v7
         env:
           TAG: ${{ steps.tag.outputs.value }}
-          IMAGE: git.zk35.de/secalpha/judo2mqtt
+          GITEA_IMAGE: git.zk35.de/secalpha/judo2mqtt
+          DHUB_IMAGE: docker.io/zk35de/mqtt-judo-bridge
         run: |
-          sudo podman build --platform linux/arm/v7 -t ${IMAGE}:${TAG}-armv7 .
-          sudo podman push ${IMAGE}:${TAG}-armv7
+          sudo podman build --platform linux/arm/v7 -t ${GITEA_IMAGE}:${TAG}-armv7 .
+          sudo podman push ${GITEA_IMAGE}:${TAG}-armv7
+          sudo podman tag ${GITEA_IMAGE}:${TAG}-armv7 ${DHUB_IMAGE}:${TAG}-armv7
+          sudo podman push ${DHUB_IMAGE}:${TAG}-armv7
 
       - name: Build and push linux/arm64
         env:
           TAG: ${{ steps.tag.outputs.value }}
-          IMAGE: git.zk35.de/secalpha/judo2mqtt
+          GITEA_IMAGE: git.zk35.de/secalpha/judo2mqtt
+          DHUB_IMAGE: docker.io/zk35de/mqtt-judo-bridge
         run: |
-          sudo podman build --platform linux/arm64 -t ${IMAGE}:${TAG}-arm64 .
-          sudo podman push ${IMAGE}:${TAG}-arm64
+          sudo podman build --platform linux/arm64 -t ${GITEA_IMAGE}:${TAG}-arm64 .
+          sudo podman push ${GITEA_IMAGE}:${TAG}-arm64
+          sudo podman tag ${GITEA_IMAGE}:${TAG}-arm64 ${DHUB_IMAGE}:${TAG}-arm64
+          sudo podman push ${DHUB_IMAGE}:${TAG}-arm64
 
       - name: Create and push multi-arch manifest
         env:
           TAG: ${{ steps.tag.outputs.value }}
-          IMAGE: git.zk35.de/secalpha/judo2mqtt
+          GITEA_IMAGE: git.zk35.de/secalpha/judo2mqtt
+          DHUB_IMAGE: docker.io/zk35de/mqtt-judo-bridge
         run: |
           if [[ "${TAG}" != "latest" ]]; then
-            podman manifest rm ${IMAGE}:${TAG} 2>/dev/null || true
-            podman manifest create ${IMAGE}:${TAG} \
-              ${IMAGE}:${TAG}-amd64 \
-              ${IMAGE}:${TAG}-armv7 \
-              ${IMAGE}:${TAG}-arm64
-            podman manifest push ${IMAGE}:${TAG}
+            podman manifest rm ${GITEA_IMAGE}:${TAG} 2>/dev/null || true
+            podman manifest create ${GITEA_IMAGE}:${TAG} \
+              ${GITEA_IMAGE}:${TAG}-amd64 \
+              ${GITEA_IMAGE}:${TAG}-armv7 \
+              ${GITEA_IMAGE}:${TAG}-arm64
+            podman manifest push ${GITEA_IMAGE}:${TAG}
+
+            podman manifest rm ${DHUB_IMAGE}:${TAG} 2>/dev/null || true
+            podman manifest create ${DHUB_IMAGE}:${TAG} \
+              ${DHUB_IMAGE}:${TAG}-amd64 \
+              ${DHUB_IMAGE}:${TAG}-armv7 \
+              ${DHUB_IMAGE}:${TAG}-arm64
+            podman manifest push ${DHUB_IMAGE}:${TAG}
           fi
 
-          podman manifest rm ${IMAGE}:latest 2>/dev/null || true
-          podman manifest create ${IMAGE}:latest \
-            ${IMAGE}:${TAG}-amd64 \
-            ${IMAGE}:${TAG}-armv7 \
-            ${IMAGE}:${TAG}-arm64
-          podman manifest push ${IMAGE}:latest
+          podman manifest rm ${GITEA_IMAGE}:latest 2>/dev/null || true
+          podman manifest create ${GITEA_IMAGE}:latest \
+            ${GITEA_IMAGE}:${TAG}-amd64 \
+            ${GITEA_IMAGE}:${TAG}-armv7 \
+            ${GITEA_IMAGE}:${TAG}-arm64
+          podman manifest push ${GITEA_IMAGE}:latest
+
+          podman manifest rm ${DHUB_IMAGE}:latest 2>/dev/null || true
+          podman manifest create ${DHUB_IMAGE}:latest \
+            ${DHUB_IMAGE}:${TAG}-amd64 \
+            ${DHUB_IMAGE}:${TAG}-armv7 \
+            ${DHUB_IMAGE}:${TAG}-arm64
+          podman manifest push ${DHUB_IMAGE}:latest
